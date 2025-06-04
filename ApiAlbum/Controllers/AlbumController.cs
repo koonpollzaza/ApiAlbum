@@ -2,6 +2,7 @@
 using ApiAlbum.Models.Request;
 using Azure.Core;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace ApiAlbum.Controllers
@@ -57,6 +58,9 @@ namespace ApiAlbum.Controllers
 
             return Ok(newAlbum);
         }
+
+
+
         [HttpGet("GetAll_Album ดูข้อมูลทั้งหมด")]
         public ActionResult GetAll_Album()
         {
@@ -64,11 +68,64 @@ namespace ApiAlbum.Controllers
             return Ok(albums);
         }
 
-        //[HttpPut]
-        //public ActionResult<Album> UpdateAlbum (Album album)
-        //{
-        //    Album updateAlbum = Album.GetById(_context, album.Id){ 
-        //    }
-        //}
+        [HttpPut]
+        public ActionResult UpdateAlbum([FromForm] RequestUpdateAlbum album)
+        {
+            var existingAlbum = _context.Albums
+                .Include(a => a.Songs)
+                .Include(a => a.File)
+                .FirstOrDefault(a => a.Id == album.Id);
+
+            if (existingAlbum == null)
+                return NotFound("Album not found");
+
+            existingAlbum.Name = album.Name;
+            existingAlbum.Description = album.Description;
+
+            if (album.SongNames != null)
+            {
+                // ลบเพลงเก่าใน DB ก่อน
+                if (existingAlbum.Songs.Any())
+                {
+                    _context.Songs.RemoveRange(existingAlbum.Songs);
+                }
+                existingAlbum.Songs = album.SongNames.Select(songName => new Song
+                {
+                    Name = songName,
+                    IsDelete = false,
+                    CreateBy = "pon",
+                    CreateDate = DateTime.Now
+                }).ToList();
+            }
+
+            // อัปเดตไฟล์ (ถ้ามี)
+            if (album.File != null)
+            {
+                //if (existingAlbum.File == null)
+                //{
+                //    var newFile = ApiAlbum.Models.File.Create(_context, album.File);
+                //    existingAlbum.File = newFile;
+                //}
+                // อัปเดตไฟล์ (ถ้ามี)
+                if (album.File != null && existingAlbum.File != null)
+                {
+                    existingAlbum.File.FileName = album.File.FileName;
+                    ApiAlbum.Models.File.Update(_context, existingAlbum.File);
+                }
+
+            }
+
+            existingAlbum.Update(_context);
+
+            return Ok(existingAlbum);
+        }
+
+
+        [HttpDelete("{id}")]
+        public ActionResult DeleteAlbum(int id)
+        {
+            Album album = Album.Delete(_context, id);
+            return Ok(album);
+        }
     }
 }

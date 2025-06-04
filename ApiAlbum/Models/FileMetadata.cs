@@ -27,9 +27,22 @@ namespace ApiAlbum.Models
             file.UpdateDate = DateTime.Now;
             file.IsDelete = false;
 
+            _context.Files.Update(file);
             _context.SaveChanges();
 
             return file;
         }
+        public static File Delete(ApialbumContext _context, File file)
+        {
+            file.UpdateBy = "pon";
+            file.UpdateDate = DateTime.Now;
+            file.IsDelete = true;
+
+            _context.Files.Update(file); 
+            _context.SaveChanges();       
+
+            return file;
+        }
+
     }
 }
