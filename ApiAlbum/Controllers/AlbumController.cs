@@ -1,4 +1,5 @@
 ﻿using ApiAlbum.Models;
+using ApiAlbum.Models.Dtos;
 using ApiAlbum.Models.Request;
 using Azure.Core;
 using Microsoft.AspNetCore.Mvc;
@@ -20,21 +21,41 @@ namespace ApiAlbum.Controllers
             _logger = logger;
             _hostEnvironment = environment;
         }
+
+        private AlbumDto MapToDto(Album album)
+        {
+            return new AlbumDto
+            {
+                Id = album.Id,
+                Name = album.Name,
+                Description = album.Description,
+                CoverImageUrl = $"/UploadFile/ProfileImg/{album.FileId}/{album.File?.FileName}",
+                Songs = album.Songs?.Select(s => new SongDto
+                {
+                    Id = s.Id,
+                    Name = s.Name
+                }).ToList() ?? new List<SongDto>()
+            };
+        }
+
         [HttpPost("เพิ่มข้อมูล")]
-        public ActionResult<Album> Create ([FromForm] RequestCreateAlbum album)
+        public ActionResult<AlbumDto> Create([FromForm] RequestCreateAlbum album)
         {
             if (album.File == null || album.File.Length == 0)
             {
                 return BadRequest("No file uploaded.");
             }
+
+            List<Song> songEntitiys = album.SongNames?
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => new Song { Name = name })
+                .ToList() ?? new List<Song>();
+
             Album newAlbum = new Album
             {
                 Name = album.Name,
                 Description = album.Description,
-                Songs = album.SongNames?.Select(name => new Song
-                {
-                    Name = name
-                }).ToList() ?? new List<Song>()
+                Songs = songEntitiys
             };
 
             Models.File file = new Models.File
@@ -42,31 +63,33 @@ namespace ApiAlbum.Controllers
                 FileName = album.File.FileName,
                 FilePath = "UploadFile/ProfileImg/"
             };
-                file = Models.File.Create(_context, file);
+            file = Models.File.Create(_context, file);
 
-                string uploads = Path.Combine(_hostEnvironment.ContentRootPath, "UploadFile/ProfileImg/" + file.Id);
-                Directory.CreateDirectory(uploads);
+            string uploads = Path.Combine(_hostEnvironment.ContentRootPath, "UploadFile/ProfileImg", file.Id.ToString());
+            Directory.CreateDirectory(uploads);
 
-                string filePath = Path.Combine(uploads, album.File.FileName);
-                using (Stream fileStream = new FileStream(filePath, FileMode.Create))
-                {
-                    album.File.CopyTo(fileStream);
-                }
+            string filePath = Path.Combine(uploads, album.File.FileName);
+            using (Stream fileStream = new FileStream(filePath, FileMode.Create))
+            {
+                album.File.CopyTo(fileStream);
+            }
 
             newAlbum.FileId = file.Id;
             newAlbum.Create(_context);
+            newAlbum.File = file; // for MapToDto
 
-            return Ok(newAlbum);
+            return Ok(MapToDto(newAlbum));
         }
 
+            [HttpGet("GetAll_Album ดูข้อมูลทั้งหมด")]
+            public ActionResult GetAll_Album()
+            {
+                List<Album> albums = Album.GetAll(_context);
+                return Ok(albums);
+            }
 
 
-        [HttpGet("GetAll_Album ดูข้อมูลทั้งหมด")]
-        public ActionResult GetAll_Album()
-        {
-            List<Album> albums = Album.GetAll(_context);
-            return Ok(albums);
-        }
+
 
         [HttpPut]
         public ActionResult UpdateAlbum([FromForm] RequestUpdateAlbum album)
@@ -77,22 +100,25 @@ namespace ApiAlbum.Controllers
                 .FirstOrDefault(a => a.Id == album.Id);
 
             if (existingAlbum == null)
+            {
                 return NotFound("Album not found");
-
+            }
             existingAlbum.Name = album.Name;
             existingAlbum.Description = album.Description;
 
             if (album.SongNames != null)
             {
-                // ลบเพลงเก่าใน DB ก่อน
                 if (existingAlbum.Songs.Any())
                 {
                     _context.Songs.RemoveRange(existingAlbum.Songs);
                 }
+
                 existingAlbum.Songs = album.SongNames.Select(songName => new Song
                 {
                     Name = songName,
                     IsDelete = false,
+                    UpdateBy = "pon",
+                    UpdateDate = DateTime.Now,
                     CreateBy = "pon",
                     CreateDate = DateTime.Now
                 }).ToList();
@@ -101,18 +127,26 @@ namespace ApiAlbum.Controllers
             // อัปเดตไฟล์ (ถ้ามี)
             if (album.File != null)
             {
-                //if (existingAlbum.File == null)
-                //{
-                //    var newFile = ApiAlbum.Models.File.Create(_context, album.File);
-                //    existingAlbum.File = newFile;
-                //}
-                // อัปเดตไฟล์ (ถ้ามี)
-                if (album.File != null && existingAlbum.File != null)
+                if (existingAlbum.File == null)
+                {
+                    var newFile = new ApiAlbum.Models.File
+                    {
+                        FileName = album.File.FileName,
+                        CreateBy = "pon",
+                        CreateDate = DateTime.Now
+                    };
+
+                    var createdFile = ApiAlbum.Models.File.Create(_context, newFile);
+                    existingAlbum.File = createdFile;
+                }
+                else
                 {
                     existingAlbum.File.FileName = album.File.FileName;
+                    existingAlbum.File.UpdateBy = "pon";
+                    existingAlbum.File.UpdateDate = DateTime.Now;
+
                     ApiAlbum.Models.File.Update(_context, existingAlbum.File);
                 }
-
             }
 
             existingAlbum.Update(_context);
@@ -120,12 +154,11 @@ namespace ApiAlbum.Controllers
             return Ok(existingAlbum);
         }
 
-
         [HttpDelete("{id}")]
-        public ActionResult DeleteAlbum(int id)
-        {
-            Album album = Album.Delete(_context, id);
-            return Ok(album);
+            public ActionResult DeleteAlbum(int id)
+            {
+                Album album = Album.Delete(_context, id);
+                return Ok(album);
+            }
         }
     }
-}

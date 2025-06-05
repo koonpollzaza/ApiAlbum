@@ -60,6 +60,8 @@ namespace ApiAlbum.Models
         }
 
 
+
+
         public static Album Delete(ApialbumContext _context, int id)
         {
             Album? album = _context.Albums
