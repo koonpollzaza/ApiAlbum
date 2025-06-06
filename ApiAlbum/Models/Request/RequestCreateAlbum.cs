@@ -1,4 +1,6 @@
-﻿namespace ApiAlbum.Models.Request
+﻿using ApiAlbum.Models.Dtos;
+
+namespace ApiAlbum.Models.Request
 {
         public partial class RequestCreateAlbum
         {
@@ -6,6 +8,5 @@
             public string Description { get; set; }
             public List<string> SongNames { get; set; }
             public IFormFile? File { get; set; }
-
     }
 }

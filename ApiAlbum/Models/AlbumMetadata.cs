@@ -57,10 +57,8 @@ namespace ApiAlbum.Models
             _context.Albums.Update(this);
             _context.SaveChanges();
             return this;
+
         }
-
-
-
 
         public static Album Delete(ApialbumContext _context, int id)
         {
@@ -73,7 +71,6 @@ namespace ApiAlbum.Models
             {
                 album.IsDelete = true;
 
-                // Soft delete songs
                 if (album.Songs != null && album.Songs.Any())
                 {
                     foreach (var song in album.Songs)
@@ -81,13 +78,12 @@ namespace ApiAlbum.Models
                         song.IsDelete = true;
                         song.UpdateBy = "pon";
                         song.UpdateDate = DateTime.Now;
+
                     }
                 }
-
-                // Soft delete file
                 if (album.File != null)
                 {
-                    File.Delete(_context, album.File); // เรียกใช้ FileMetadata
+                    File.Delete(_context, album.File); 
                 }
 
                 album.UpdateBy = "pon";
@@ -98,6 +94,31 @@ namespace ApiAlbum.Models
 
             return album ?? new Album();
         }
+        public static List<Album> Search(ApialbumContext _context, string keyword)
+        {
+            var albums = _context.Albums
+                .Where(album =>
+                    album.IsDelete == false &&
+                    (
+                        album.Name.Contains(keyword) ||
+                        album.Songs.Any(song => song.Name.Contains(keyword) && song.IsDelete == false)
+                    ))
+                .Select(album => new Album
+                {
+                    Id = album.Id,
+                    Name = album.Name,
+                    Description = album.Description,
+                    IsDelete = album.IsDelete,
+                    Songs = album.Songs
+                        .Where(song => song.IsDelete == false)
+                        .ToList()
+                })
+                .ToList();
+
+            return albums;
+        }
+
+
 
     }
 }

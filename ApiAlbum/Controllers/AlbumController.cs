@@ -5,6 +5,7 @@ using Azure.Core;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Newtonsoft.Json;
 
 namespace ApiAlbum.Controllers
 {
@@ -46,7 +47,7 @@ namespace ApiAlbum.Controllers
                 return BadRequest("No file uploaded.");
             }
 
-            List<Song> songEntitiys = album.SongNames?
+            List<Song> songEntitiys = album.SongNames
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Select(name => new Song { Name = name })
                 .ToList() ?? new List<Song>();
@@ -88,13 +89,10 @@ namespace ApiAlbum.Controllers
                 return Ok(albums);
             }
 
-
-
-
         [HttpPut]
         public ActionResult UpdateAlbum([FromForm] RequestUpdateAlbum album)
         {
-            var existingAlbum = _context.Albums
+            Album? existingAlbum = _context.Albums
                 .Include(a => a.Songs)
                 .Include(a => a.File)
                 .FirstOrDefault(a => a.Id == album.Id);
@@ -103,40 +101,53 @@ namespace ApiAlbum.Controllers
             {
                 return NotFound("Album not found");
             }
+
             existingAlbum.Name = album.Name;
             existingAlbum.Description = album.Description;
 
-            if (album.SongNames != null)
+            //Update Song
+            List<Song> songs = new();
+
+            if (!string.IsNullOrWhiteSpace(album.SongNames))
             {
-                if (existingAlbum.Songs.Any())
+                var songNames = JsonConvert.DeserializeObject<List<Song>>(album.SongNames);
+
+                foreach (var oldSong in existingAlbum.Songs)
                 {
-                    _context.Songs.RemoveRange(existingAlbum.Songs);
+                    oldSong.IsDelete = true;
+                    oldSong.UpdateBy = "pon";
+                    oldSong.UpdateDate = DateTime.Now;
                 }
 
-                existingAlbum.Songs = album.SongNames.Select(songName => new Song
+                foreach (var newSong in songNames)
                 {
-                    Name = songName,
-                    IsDelete = false,
-                    UpdateBy = "pon",
-                    UpdateDate = DateTime.Now,
-                    CreateBy = "pon",
-                    CreateDate = DateTime.Now
-                }).ToList();
-            }
+                    Song song = new Song
+                    {
+                        Name = newSong.Name,
+                        IsDelete = false,
+                        CreateBy = "pon",
+                        CreateDate = DateTime.Now,
+                        UpdateBy = "pon",
+                        UpdateDate = DateTime.Now,
+                        Album = existingAlbum 
+                    };
 
-            // อัปเดตไฟล์ (ถ้ามี)
+                    _context.Songs.Add(song);
+                }
+            }
+                    //UpdateFile
             if (album.File != null)
             {
                 if (existingAlbum.File == null)
                 {
-                    var newFile = new ApiAlbum.Models.File
+                    ApiAlbum.Models.File newFile = new ApiAlbum.Models.File
                     {
                         FileName = album.File.FileName,
                         CreateBy = "pon",
                         CreateDate = DateTime.Now
                     };
 
-                    var createdFile = ApiAlbum.Models.File.Create(_context, newFile);
+                    ApiAlbum.Models.File createdFile = ApiAlbum.Models.File.Create(_context, newFile);
                     existingAlbum.File = createdFile;
                 }
                 else
@@ -154,11 +165,35 @@ namespace ApiAlbum.Controllers
             return Ok(existingAlbum);
         }
 
+
         [HttpDelete("{id}")]
             public ActionResult DeleteAlbum(int id)
             {
                 Album album = Album.Delete(_context, id);
                 return Ok(album);
             }
+
+
+        [HttpGet("Search/{name}", Name = "SearchAlbumName")]
+        public ActionResult SearchAlbumName(string name)
+        {
+            List<Album> albums = Album.Search(_context, name);
+
+            if (albums.Count == 0)
+            {
+                return NotFound("ไม่พบอัลบั้มที่ตรงกับชื่อที่ค้นหา");
+            }
+
+            foreach (var album in albums)
+            {
+                album.Songs = album.Songs
+                    .Where(song => song.IsDelete == false)
+                    .ToList();
+            }
+
+            return Ok(albums);
         }
+
+
     }
+}
