@@ -39,6 +39,8 @@ namespace ApiAlbum.Controllers
             };
         }
 
+
+//CREATE
         [HttpPost("เพิ่มข้อมูล")]
         public ActionResult<AlbumDto> Create([FromForm] RequestCreateAlbum album)
         {
@@ -82,6 +84,12 @@ namespace ApiAlbum.Controllers
             return Ok(MapToDto(newAlbum));
         }
 
+
+
+
+
+
+//ดูข้อมูลงับ เบ๊บ
             [HttpGet("GetAll_Album ดูข้อมูลทั้งหมด")]
             public ActionResult GetAll_Album()
             {
@@ -89,6 +97,12 @@ namespace ApiAlbum.Controllers
                 return Ok(albums);
             }
 
+
+
+
+
+
+//UPDATE
         [HttpPut]
         public ActionResult UpdateAlbum([FromForm] RequestUpdateAlbum album)
         {
@@ -105,37 +119,48 @@ namespace ApiAlbum.Controllers
             existingAlbum.Name = album.Name;
             existingAlbum.Description = album.Description;
 
-            //Update Song
-            List<Song> songs = new();
-
             if (!string.IsNullOrWhiteSpace(album.SongNames))
             {
-                var songNames = JsonConvert.DeserializeObject<List<Song>>(album.SongNames);
+                List<Song> inSongs = JsonConvert.DeserializeObject<List<Song>>(album.SongNames);
 
-                foreach (var oldSong in existingAlbum.Songs)
-                {
-                    oldSong.IsDelete = true;
-                    oldSong.UpdateBy = "pon";
-                    oldSong.UpdateDate = DateTime.Now;
-                }
+                // ดึง Id เพลงที่มีอยู่ในรายการใหม่ (คือเพลงที่ไม่ถูกลบ)
+                var Ids = inSongs
+                    .Where(s => s.Id != 0)
+                    .Select(s => s.Id)
+                    .ToHashSet();
 
-                foreach (var newSong in songNames)
+                // UPDATE เพลงเก่า หรือเพิ่มเพลงใหม่
+                foreach (Song song in inSongs)
                 {
-                    Song song = new Song
+                    if (song.Id != 0)
                     {
-                        Name = newSong.Name,
-                        IsDelete = false,
-                        CreateBy = "pon",
-                        CreateDate = DateTime.Now,
-                        UpdateBy = "pon",
-                        UpdateDate = DateTime.Now,
-                        Album = existingAlbum 
-                    };
-
-                    _context.Songs.Add(song);
+                        // EDIT เพลงเก่า
+                        Song existingSong = existingAlbum.Songs.FirstOrDefault(s => s.Id == song.Id);
+                        if (existingSong != null)
+                        {
+                            existingSong.Name = song.Name;
+                            existingSong.IsDelete = false;
+                            existingSong.UpdateBy = "pon";
+                            existingSong.UpdateDate = DateTime.Now;
+                        }
+                    }
+                    else
+                    {
+                        Song newSong = new Song
+                        {
+                            Name = song.Name,
+                            Album = existingAlbum,
+                            IsDelete = false,
+                            CreateBy = "pon",
+                            CreateDate = DateTime.Now,
+                            UpdateBy = "pon",
+                            UpdateDate = DateTime.Now
+                        };
+                        _context.Songs.Add(newSong);
+                    }
                 }
             }
-                    //UpdateFile
+// Update File
             if (album.File != null)
             {
                 if (existingAlbum.File == null)
@@ -159,13 +184,17 @@ namespace ApiAlbum.Controllers
                     ApiAlbum.Models.File.Update(_context, existingAlbum.File);
                 }
             }
-
             existingAlbum.Update(_context);
-
             return Ok(existingAlbum);
         }
 
 
+
+
+
+
+
+//DELETE
         [HttpDelete("{id}")]
             public ActionResult DeleteAlbum(int id)
             {
@@ -174,6 +203,12 @@ namespace ApiAlbum.Controllers
             }
 
 
+
+
+
+
+
+//SEARCH NAME
         [HttpGet("Search/{name}", Name = "SearchAlbumName")]
         public ActionResult SearchAlbumName(string name)
         {

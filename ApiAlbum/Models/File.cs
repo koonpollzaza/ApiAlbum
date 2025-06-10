@@ -14,7 +14,7 @@ public partial class File
     public int Id { get; set; }
 
     public string FileName { get; set; } = null!;
-
+    [Required]
     public string FilePath { get; set; } = null!;
 
     public string? CreateBy { get; set; }
