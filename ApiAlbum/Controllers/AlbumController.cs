@@ -40,8 +40,8 @@ namespace ApiAlbum.Controllers
         }
 
 
-//CREATE
-        [HttpPost("เพิ่มข้อมูล")]
+        //CREATE
+        [HttpPost]
         public ActionResult<AlbumDto> Create([FromForm] RequestCreateAlbum album)
         {
             if (album.File == null || album.File.Length == 0)
@@ -61,15 +61,18 @@ namespace ApiAlbum.Controllers
                 Songs = songEntitiys
             };
 
+            // เตรียมข้อมูลไฟล์
             Models.File file = new Models.File
             {
                 FileName = album.File.FileName,
-                FilePath = "UploadFile/ProfileImg/"
+                FilePath = "UploadFile/ProfileImg/" + album.File.FileName
             };
             file = Models.File.Create(_context, file);
 
-            string uploads = Path.Combine(_hostEnvironment.ContentRootPath, "UploadFile/ProfileImg", file.Id.ToString());
-            Directory.CreateDirectory(uploads);
+            // ❌ ไม่สร้างโฟลเดอร์ย่อยตาม file.Id
+            // ✅ ใช้โฟลเดอร์ UploadFile/ProfileImg/ โดยตรง
+            string uploads = Path.Combine(_hostEnvironment.ContentRootPath, "UploadFile/ProfileImg");
+            Directory.CreateDirectory(uploads); // สร้างโฟลเดอร์นี้ถ้ายังไม่มี
 
             string filePath = Path.Combine(uploads, album.File.FileName);
             using (Stream fileStream = new FileStream(filePath, FileMode.Create))
@@ -89,8 +92,8 @@ namespace ApiAlbum.Controllers
 
 
 
-//ดูข้อมูลงับ เบ๊บ
-            [HttpGet("GetAll_Album ดูข้อมูลทั้งหมด")]
+        //ดูข้อมูลงับ เบ๊บ
+        [HttpGet("GetAll_Album")]
             public ActionResult GetAll_Album()
             {
                 List<Album> albums = Album.GetAll(_context);
@@ -99,12 +102,24 @@ namespace ApiAlbum.Controllers
 
 
 
+        [HttpGet("{id}")]
+        public ActionResult GetAlbumById(int id)
+        {
+            var album = _context.Albums
+                .Include(a => a.Songs)
+                .Include(a => a.File)
+                .FirstOrDefault(a => a.Id == id);
+
+            if (album == null)
+                return NotFound("Album not found");
+
+            return Ok(album);
+        }
 
 
-
-//UPDATE
+        //UPDATE
         [HttpPut]
-        public ActionResult UpdateAlbum([FromForm] RequestUpdateAlbum album)
+        public ActionResult UpdateAlbum([FromForm]RequestUpdateAlbum album)
         {
             Album? existingAlbum = _context.Albums
                 .Include(a => a.Songs)
@@ -135,13 +150,28 @@ namespace ApiAlbum.Controllers
                     if (song.Id != 0)
                     {
                         // EDIT เพลงเก่า
-                        Song existingSong = existingAlbum.Songs.FirstOrDefault(s => s.Id == song.Id);
-                        if (existingSong != null)
+                        if (song.IsDelete == true)
                         {
-                            existingSong.Name = song.Name;
-                            existingSong.IsDelete = false;
-                            existingSong.UpdateBy = "pon";
-                            existingSong.UpdateDate = DateTime.Now;
+                            Song existingSong = existingAlbum.Songs.FirstOrDefault(s => s.Id == song.Id);
+                            if (existingSong != null)
+                            {
+                                existingSong.Name = song.Name;
+                                existingSong.IsDelete = true;
+                                existingSong.UpdateBy = "pon";
+                                existingSong.UpdateDate = DateTime.Now;
+                            }
+                            
+                        }
+                        else
+                        {
+                            Song existingSong = existingAlbum.Songs.FirstOrDefault(s => s.Id == song.Id);
+                            if (existingSong != null)
+                            {
+                                existingSong.Name = song.Name;
+                                existingSong.IsDelete = false;
+                                existingSong.UpdateBy = "pon";
+                                existingSong.UpdateDate = DateTime.Now;
+                            }
                         }
                     }
                     else
@@ -160,29 +190,34 @@ namespace ApiAlbum.Controllers
                     }
                 }
             }
-// Update File
+            // Update File
             if (album.File != null)
             {
-                if (existingAlbum.File == null)
+                // เตรียมข้อมูลไฟล์ใหม่
+                ApiAlbum.Models.File newFile = new ApiAlbum.Models.File
                 {
-                    ApiAlbum.Models.File newFile = new ApiAlbum.Models.File
-                    {
-                        FileName = album.File.FileName,
-                        CreateBy = "pon",
-                        CreateDate = DateTime.Now
-                    };
+                    FileName = album.File.FileName,
+                    FilePath = "UploadFile/ProfileImg/" + album.File.FileName,
+                    CreateBy = "pon",
+                    CreateDate = DateTime.Now
+                };
 
-                    ApiAlbum.Models.File createdFile = ApiAlbum.Models.File.Create(_context, newFile);
-                    existingAlbum.File = createdFile;
-                }
-                else
+                // สร้างข้อมูลไฟล์ในฐานข้อมูล
+                ApiAlbum.Models.File createdFile = ApiAlbum.Models.File.Create(_context, newFile);
+
+                // อัปโหลดไฟล์ไปยังโฟลเดอร์
+                string uploads = Path.Combine(_hostEnvironment.ContentRootPath, "UploadFile/ProfileImg");
+                Directory.CreateDirectory(uploads); // สร้างโฟลเดอร์ถ้ายังไม่มี
+
+                string filePath = Path.Combine(uploads, album.File.FileName);
+                using (Stream fileStream = new FileStream(filePath, FileMode.Create)) // เขียนทับไฟล์เดิมถ้ามี
                 {
-                    existingAlbum.File.FileName = album.File.FileName;
-                    existingAlbum.File.UpdateBy = "pon";
-                    existingAlbum.File.UpdateDate = DateTime.Now;
-
-                    ApiAlbum.Models.File.Update(_context, existingAlbum.File);
+                    album.File.CopyTo(fileStream);
                 }
+
+                // เชื่อมไฟล์ใหม่กับอัลบั้ม
+                existingAlbum.FileId = createdFile.Id;
+                existingAlbum.File = createdFile;
             }
             existingAlbum.Update(_context);
             return Ok(existingAlbum);

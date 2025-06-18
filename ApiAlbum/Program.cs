@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using ApiAlbum.Models;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.FileProviders;
+using System.IO;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -17,6 +19,16 @@ builder.Services.AddDbContext<ApialbumContext>(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -27,6 +39,15 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors();
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(builder.Environment.ContentRootPath, "UploadFile/ProfileImg")),
+    RequestPath = "/UploadFile/ProfileImg"
+});
 
 app.UseAuthorization();
 
