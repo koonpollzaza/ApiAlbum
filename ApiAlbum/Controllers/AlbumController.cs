@@ -41,7 +41,7 @@ namespace ApiAlbum.Controllers
 
 
         //CREATE
-        [HttpPost]
+        [HttpPost("Create")]
         public ActionResult<AlbumDto> Create([FromForm] RequestCreateAlbum album)
         {
             if (album.File == null || album.File.Length == 0)
@@ -118,7 +118,7 @@ namespace ApiAlbum.Controllers
 
 
         //UPDATE
-        [HttpPut]
+        [HttpPut("Update")]
         public ActionResult UpdateAlbum([FromForm]RequestUpdateAlbum album)
         {
             Album? existingAlbum = _context.Albums
